@@ -1,0 +1,11 @@
+# 編譯產物
+a.out
+*.out
+*.o
+
+# 無副檔名的執行檔（如 sol、main）
+problems/*/sol
+problems/*/main
+
+# macOS
+.DS_Store

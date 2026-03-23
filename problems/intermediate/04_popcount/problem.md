@@ -1,6 +1,7 @@
 # [INTERMEDIATE] 題目 04：計算 Set Bits 數量（Popcount）
 
 ## 題目描述
+測試git
 
 實作函式 `int popcount(unsigned int n)`，計算 `n` 的二進位表示中有多少個 `1`。
 

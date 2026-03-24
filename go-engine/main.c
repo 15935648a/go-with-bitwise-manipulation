@@ -1,95 +1,52 @@
 #include <stdio.h>
-#include <string.h>
 #include "bitboard.h"
+#include "mcts.h"
 
-// 掃描對手棋子，提掉氣數為 0 的群
-void check_captures(Board *b, int row, int col, int opponent) {
-    // 找剛落子位置的鄰接格
-    int pos = row * 19 + col;
-    u64 stone[6] = {0};
-    stone[pos >> 6] |= (1ULL << (pos & 63));
-
-    u64 adj[6] = {0};
-    get_neighbors(stone, adj);
-
-    // 對每個鄰接的對手棋子做 flood_fill + 數氣
-    u64 *opp_board = (opponent == 1) ? b->black : b->white;
-    u64 visited[6] = {0};
-
-    for (int i = 0; i < 6; i++) {
-        u64 opp_neighbors = adj[i] & opp_board[i] & ~visited[i];
-        while (opp_neighbors) {
-            int bit = __builtin_ctzll(opp_neighbors);
-            int p = i * 64 + bit;
-
-            u64 start[6] = {0};
-            start[p >> 6] |= (1ULL << (p & 63));
-
-            u64 group[6] = {0};
-            flood_fill(opp_board, start, group);
-
-            if (count_liberties(b, group) == 0)
-                capture_group(b, group, opponent);
-
-            // 標記整群為已訪問
-            for (int k = 0; k < 6; k++)
-                visited[k] |= group[k];
-
-            opp_neighbors &= opp_neighbors - 1;
-        }
-    }
-}
+#define MCTS_ITERATIONS 200
 
 int main(void) {
     init_zobrist();
 
     Board b = {0};
-    int color = 1;        // 1=黑先
+    int color = 1;
     u64 prev_hash = 0;
     int consecutive_pass = 0;
 
+    // 兩個 AI 各自維護一棵樹
+    MCTSNode *root = NULL;
+
     print_board(&b);
 
-    char input[32];
     while (1) {
-        printf("%s to move (row col or 'pass'): ", color == 1 ? "Black" : "White");
-        if (!fgets(input, sizeof(input), stdin)) break;
+        printf("%s (AI) thinking...\n", color == 1 ? "Black" : "White");
 
-        // pass
-        if (strncmp(input, "pass", 4) == 0) {
+        int row, col;
+        MCTSNode *chosen = mcts_best_move(&b, color, MCTS_ITERATIONS, &row, &col);
+
+        if (!chosen) {
+            printf("%s passes.\n", color == 1 ? "Black" : "White");
+            if (root) { mcts_free(root); root = NULL; }
             consecutive_pass++;
-            if (consecutive_pass >= 2) {
-                printf("Game over.\n");
-                break;
-            }
+            if (consecutive_pass >= 2) { printf("Game over.\n"); break; }
             color = (color == 1) ? 2 : 1;
             continue;
         }
-        consecutive_pass = 0;
 
-        int row, col;
-        if (sscanf(input, "%d %d", &row, &col) != 2) {
-            printf("Invalid input.\n");
-            continue;
-        }
-        if (row < 0 || row > 18 || col < 0 || col > 18) {
-            printf("Out of bounds.\n");
-            continue;
-        }
-        if (!is_legal_move(&b, row, col, color, prev_hash)) {
-            printf("Illegal move.\n");
-            continue;
-        }
+        consecutive_pass = 0;
+        printf("%s plays: %d %d\n", color == 1 ? "Black" : "White", row, col);
+
+        // 釋放舊樹，保留選中的子節點作為下一輪的根
+        if (root) mcts_free(root);
+        root = chosen;
+        root->parent = NULL;
 
         prev_hash = b.hash;
         set_stone(&b, row, col, color);
-
-        int opponent = (color == 1) ? 2 : 1;
-        check_captures(&b, row, col, opponent);
-
+        check_captures(&b, row, col, (color == 1) ? 2 : 1);
         print_board(&b);
-        color = opponent;
+        color = (color == 1) ? 2 : 1;
     }
 
+    if (root) mcts_free(root);
     return 0;
 }

@@ -4,6 +4,13 @@
 #include <stdio.h>
 u64 zobrist_table[361][2];
 
+void get_empty(Board *b, u64 empty[6]) {
+	for (int i = 0; i < 6; i++)
+		empty[i] = ~(b->black[i] | b->white[i]) & VALID_MASK[i];
+}
+
+
+
 void set_stone(Board *b, int row, int col, int color) {
 	int pos = row * 19 + col; /*共有19個row,也就是說第(i,j)的子會是i * 19 +
 	j的位置*/
@@ -173,4 +180,84 @@ void print_board(Board *b){
 		printf("\n");
 	}
 	printf("\n");
+}
+
+
+void check_captures(Board *b, int row, int col, int opponent) {
+    // 找剛落子位置的鄰接格
+    int pos = row * 19 + col;
+    u64 stone[6] = {0};
+    stone[pos >> 6] |= (1ULL << (pos & 63));
+
+    u64 adj[6] = {0};
+    get_neighbors(stone, adj);
+
+    // 對每個鄰接的對手棋子做 flood_fill + 數氣
+    u64 *opp_board = (opponent == 1) ? b->black : b->white;
+    u64 visited[6] = {0};
+
+    for (int i = 0; i < 6; i++) {
+        u64 opp_neighbors = adj[i] & opp_board[i] & ~visited[i];
+        while (opp_neighbors) {
+            int bit = __builtin_ctzll(opp_neighbors);
+            int p = i * 64 + bit;
+
+            u64 start[6] = {0};
+            start[p >> 6] |= (1ULL << (p & 63));
+
+            u64 group[6] = {0};
+            flood_fill(opp_board, start, group);
+
+            if (count_liberties(b, group) == 0)
+                capture_group(b, group, opponent);
+
+            // 標記整群為已訪問
+            for (int k = 0; k < 6; k++)
+                visited[k] |= group[k];
+
+            opp_neighbors &= opp_neighbors - 1;
+        }
+    }
+}
+
+int count_territory(Board *b, int color) {
+    u64 visited[6] = {0};
+    int territory = 0;
+
+    u64 all_empty[6];
+    get_empty(b, all_empty);
+
+    for (int i = 0; i < 6; i++) {
+        u64 unvisited = all_empty[i] & ~visited[i];
+        while (unvisited) {
+            int bit = __builtin_ctzll(unvisited);
+
+            u64 start[6] = {0};
+            start[i] |= (1ULL << bit);
+            u64 group[6] = {0};
+            flood_fill(all_empty, start, group);
+
+            u64 border[6] = {0};
+            get_neighbors(group, border);
+
+            int touch_black = 0, touch_white = 0;
+            for (int k = 0; k < 6; k++) {
+                if (border[k] & b->black[k]) touch_black = 1;
+                if (border[k] & b->white[k]) touch_white = 1;
+            }
+
+            if (touch_black && !touch_white && color == 1)
+                for (int k = 0; k < 6; k++)
+                    territory += __builtin_popcountll(group[k]);
+            if (touch_white && !touch_black && color == 2)
+                for (int k = 0; k < 6; k++)
+                    territory += __builtin_popcountll(group[k]);
+
+            for (int k = 0; k < 6; k++)
+                visited[k] |= group[k];
+
+            unvisited = all_empty[i] & ~visited[i];
+        }
+    }
+    return territory;
 }

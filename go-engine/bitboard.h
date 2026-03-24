@@ -29,6 +29,15 @@ static const u64 NOT_RIGHT_EDGE[6] = {
 	~((1ULL << 9)  | (1ULL << 28) | (1ULL << 47)),
 	~((1ULL << 2)  | (1ULL << 21) | (1ULL << 40))
 };
+static const u64 VALID_MASK[6] = {
+	0xFFFFFFFFFFFFFFFF,
+	0xFFFFFFFFFFFFFFFF,
+	0xFFFFFFFFFFFFFFFF,
+	0xFFFFFFFFFFFFFFFF,
+	0xFFFFFFFFFFFFFFFF,
+	0x000001FFFFFFFFFF
+};
+
 
 void set_stone(Board *b, int row, int col, int color);   // color: 1=black, 2=white
 void clear_stone(Board *b, int row, int col, int color);
@@ -41,4 +50,7 @@ void capture_group(Board *b, u64 group[6], int color);
 int is_legal_move(Board *b, int row, int col, int color, u64 prev_hash);
 void init_zobrist( void );
 void print_board(Board *b);
+void check_captures(Board *b, int row, int col, int opponent);
+void get_empty(Board *b, u64 empty[6]);
+int count_territory(Board *b, int color);
 #endif
